@@ -1,0 +1,215 @@
+package com.gamecodeschool.logicsimulator;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// AbstractGridCell represents a single grid cell in the Logic Simulator. It is the bass class for
+// each of the different stat classes that each grid cell can represent.
+//
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.util.Log;
+
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.Random;
+import java.util.Vector;
+
+import static android.content.Context.MODE_PRIVATE;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+class Grid implements Serializable {
+    int gridWidth, gridHeight, blockSize;
+    int xOffset, yOffset;
+    Random rand;
+    int gridSize;
+    AbstractGridCell selected, previousSelection, wireSource;
+    Context context;
+    AbstractGridCellSaves saves;
+
+    private class GridPosition{
+        int x,y;
+        public GridPosition(int x, int y)               {this.x=x; this.y=y;}
+    }
+
+
+    public Vector<AbstractGridCell> gridCells;
+    public Vector<AbstractGridCell> hudCells;
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+    public Grid(int x, int y, Context context){
+        // Forcing context to be set, so there aren't any errors in context related functions, like
+        // saving and loading
+        setContext(context);
+
+        saves = new AbstractGridCellSaves();
+
+        if (x > y){ gridSize = 6; }
+        else { gridSize = 10; }
+
+        blockSize = y / gridSize;
+        gridWidth =  10;
+        gridHeight = 10;
+        xOffset = 0;
+        yOffset = 0;
+        rand = new Random();
+        selected = null;
+        previousSelection = null;
+        wireSource = null;
+        reset();
+        setUpHud();
+    }
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+    public void reset(){
+        hudCells = new Vector<>(10*10); // set all to null to force hud touch priority to work
+        hudCells.clear();
+        for(int h=0; h<gridWidth*gridHeight; h++)
+            for(int v=0; v<gridHeight; v++)
+                hudCells.add((new NullGridCell(h*blockSize ,v*blockSize, blockSize,
+                        blockSize)));
+
+        gridCells = new Vector<>(10*10);
+        for(int h=0; h<gridWidth*gridHeight; h++)
+            for(int v=0; v<gridHeight; v++)
+                gridCells.add((new EmptyGridCell(h*blockSize + xOffset*blockSize,
+                        v*blockSize + yOffset*blockSize, blockSize, blockSize)));
+
+
+        setUpHud();//remove this. this is only needed if the hud is on the grid
+    }
+
+
+    public void setContext(Context context){this.context = context;}
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+    // Save and Load need to be separated into a saves class to be reused in Nested circuit
+    public void Save(String fileName) {
+        saves.Save(context, gridCells, fileName);
+    }
+
+    public void Load(String fileName) {
+        try {
+            FileInputStream fis = context.openFileInput(fileName);
+            ObjectInputStream ois = new ObjectInputStream(fis);
+            gridCells = (Vector<AbstractGridCell>) ois.readObject();
+            ois.close();
+            fis.close();
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            return;
+        } catch (ClassNotFoundException c) {
+            c.printStackTrace();
+            return;
+        }
+    }
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+
+    public void setUpHud(){
+        Log.i("hud", "BlockSize: " + blockSize);
+        int row = 0, column = 0;
+        addIconToHud(new SwitchIcon(setHudCellLocation(row, column)),row,column);
+        row = 1; column = 0;
+        addIconToHud(new AndIcon(setHudCellLocation(row, column)),row,column);
+        row = 2 ; column = 0;
+        addIconToHud(new OrIcon(setHudCellLocation(row, column)),row,column);
+        row = 3 ; column = 0;
+        addIconToHud(new NotIcon(setHudCellLocation(row, column)),row,column);
+        row = 4 ; column = 0;
+        addIconToHud(new LightIcon(setHudCellLocation(row, column)),row,column);
+        row = 5 ; column = 0;
+        addIconToHud(new DeleteIcon(setHudCellLocation(row, column)),row,column);
+        row = 0 ; column = 1;
+        addIconToHud(new WireSourceIcon(setHudCellLocation(row, column)),row,column);
+        row = 1 ; column = 1;
+        addIconToHud(new WireInputIcon(setHudCellLocation(row, column)),row,column);
+        row = 2 ; column = 1;
+        addIconToHud(new ClearInputIcon(setHudCellLocation(row, column)),row,column);
+        row = 3 ; column = 1;
+        addIconToHud(new ClearScreenIcon(setHudCellLocation(row, column)),row,column);
+        row = 4 ; column = 1;
+        addIconToHud(new CreateSaveIcon(setHudCellLocation(row, column)),row,column);
+        row = 0 ; column = 2;
+        addIconToHud(new SavesIcon(setHudCellLocation(row, column), "A"),row,column);
+        row = 1 ; column = 2;
+        addIconToHud(new SavesIcon(setHudCellLocation(row, column), "B"),row,column);
+        row = 2 ; column = 2;
+        addIconToHud(new SavesIcon(setHudCellLocation(row, column), "C"),row,column);
+        row = 3 ; column = 2;
+        addIconToHud(new SavesIcon(setHudCellLocation(row, column), "D"),row,column);
+        row = 4 ; column = 2;
+        addIconToHud(new SavesIcon(setHudCellLocation(row, column), "E"),row,column);
+        row = 5 ; column = 2;
+        addIconToHud(new SavesIcon(setHudCellLocation(row, column), "F"),row,column);
+        row = 3 ; column = 9;
+        addIconToHud(new OffsetRightIcon(setHudCellLocation(row, column)),row,column);
+    }
+
+    private EmptyGridCell setHudCellLocation( int row, int column){
+        return new EmptyGridCell(column * blockSize,row * blockSize,blockSize, blockSize);
+    }
+
+    public void addIconToHud(AbstractGridCell Icon, int row, int column){
+        // used to take hud off of the grid
+        hudCells.set(iconLocation(row,column), Icon);
+    }
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+    public int gridColumn(int column)            { return 10 * (column );}
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+    public int gridRow(int row)                  { return (row);}
+
+    // gives the grid vector number
+    public int iconLocation(int row, int column){return gridRow(row) + gridColumn(column);}
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+    private int gridCellN(GridPosition p){return (gridHeight*p.x+p.y);}
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+    private int distanceToClosestFrom(GridPosition shotP, Vector<AbstractGridCell> cells){
+        int subD=gridWidth*gridHeight;
+
+        for(int i=0; i < cells.size(); i++){
+            AbstractGridCell agc = cells.get(1);
+            if(agc instanceof LogicNode){
+                // set subD to existing min, or distance from agc to shotP
+            }
+        }
+        return subD;
+    }
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+    public int touchGrid(float touchX, float touchY){
+        // this "if" checks if the click was a block size away from the edge of the screen
+        // this is done to get screen space to the hud layout
+        GridPosition tP = getGridTouchPosition(touchX, touchY);
+        int currGridNum = gridCellN(tP);
+
+        // checks if the hud has a button in that location before choosing which grid to proceed with
+        if ( hudCells.get(currGridNum) instanceof NullGridCell) {
+            AbstractGridCell clickedCell = onClick(currGridNum, gridCells);
+            CellClickEvent(clickedCell, currGridNum);
+            return distanceToClosestFrom(tP, gridCells);
+        }
+        // this is the hud layout logic
+        else {
+            AbstractGridCell clickedCell = onClick(currGridNum, hudCells);
+            CellClickEvent(clickedCell, currGridNum);
+            return distanceToClosestFrom(tP, hudCells);
+        }
+    }
+
+    //``````````````````````````````````````````````````````````````````````````````````````````````
+    public GridPosition getGridTouchPosition(float touchX, float touchY){
+        GridPosition tp = new GridPosition(((int)touchX + (xOffset))/ blockSize,
+                ((int)touchY + yOffset)/ blockSize);
+        return tp;
+    }
+
+    //```````````````````````````````````````````````````
